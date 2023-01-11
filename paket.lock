@@ -1,0 +1,11 @@
+STORAGE: NONE
+STRATEGY: MIN
+RESTRICTION: == net461
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    ClosedXML (0.100.2)
+    FParsec (1.1.1)
+      FSharp.Core (>= 4.3.4)
+      System.ValueTuple (>= 4.4)
+    FSharp.Core (4.7.2)
+    System.ValueTuple (4.4)
