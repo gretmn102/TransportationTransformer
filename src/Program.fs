@@ -109,7 +109,7 @@ module CustomDateTime =
             time |> Option.bind (fun x -> x.Seconds |> Option.map int) |> Option.defaultValue 0
         )
 
-type Item =
+type Row =
     {
         /// 1.1, 1.1.1, ...
         Index: int []
@@ -121,42 +121,20 @@ type Item =
         EndLocation: string
     }
 
-[<Struct>]
-type StartOrEnd = Start | End
-
-let start (xmlPath: string) =
-    let getWorkbook (path: string) =
-        try
-            new XLWorkbook(path)
-            |> Ok
-        with
-            | :? System.IO.IOException ->
-                sprintf "Доступ к таблице запрещен. Если он открыт у вас в Excel, то закройте Excel и попробуйте снова."
-                |> Error
-            | e ->
-                sprintf "Непредвиденная ошибка:\n%A" e
-                |> Error
-
-    let getWorksheet name (workbook: XLWorkbook) =
-        match workbook.Worksheets.TryGetWorksheet name with
-        | true, worksheet ->
-            Ok worksheet
-        | false, _ ->
-            Error (sprintf "В документе не найдена \"%s\" таблица!" name)
-
-    let parseIndexes =
-        let r = System.Text.RegularExpressions.Regex(@"\d+")
-        fun input ->
-            r.Matches input
-            |> Seq.cast<System.Text.RegularExpressions.Match>
-            |> Seq.map (fun x ->
-                int x.Value
-            )
-            |> Array.ofSeq
-
-    resultComputation {
-        use workbook = getWorkbook xmlPath
-        let! worksheet = getWorksheet "Поездки" workbook
+type Rows = Row []
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Rows =
+    let parseFromXLWorksheet (worksheet: IXLWorksheet) =
+        let parseIndexes =
+            let r = System.Text.RegularExpressions.Regex(@"\d+")
+            fun input ->
+                r.Matches input
+                |> Seq.cast<System.Text.RegularExpressions.Match>
+                |> Seq.map (fun x ->
+                    int x.Value
+                )
+                |> Array.ofSeq
 
         let rows =
             worksheet.Rows()
@@ -227,7 +205,35 @@ let start (xmlPath: string) =
                     List.rev acc
             f ([], None) rows
 
-        let items = getItems ()
+        getItems ()
+
+[<Struct>]
+type StartOrEnd = Start | End
+
+let start (xmlPath: string) =
+    let getWorkbook (path: string) =
+        try
+            new XLWorkbook(path)
+            |> Ok
+        with
+            | :? System.IO.IOException ->
+                sprintf "Доступ к таблице запрещен. Если он открыт у вас в Excel, то закройте Excel и попробуйте снова."
+                |> Error
+            | e ->
+                sprintf "Непредвиденная ошибка:\n%A" e
+                |> Error
+
+    let getWorksheet name (workbook: XLWorkbook) =
+        match workbook.Worksheets.TryGetWorksheet name with
+        | true, worksheet ->
+            Ok worksheet
+        | false, _ ->
+            Error (sprintf "В документе не найдена \"%s\" таблица!" name)
+
+    resultComputation {
+        use workbook = getWorkbook xmlPath
+        let! worksheet = getWorksheet "Поездки" workbook
+        let items = Rows.parseFromXLWorksheet worksheet
 
         let items =
             items
