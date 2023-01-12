@@ -254,20 +254,31 @@ let start (xmlPath: string) =
                         xs
                         |> List.tryPick (fun x ->
                             if x.StartDateTime = d then
-                                Some x.StartLocation
+                                Some (XLCellValue.op_Implicit x.StartLocation)
                             elif x.EndDataTime = d then
-                                Some x.EndLocation
+                                Some (XLCellValue.op_Implicit x.EndLocation)
                             else
                                 None
                         )
                     )
-                    |> fun xs -> Some trailer :: xs
+                    |> fun xs -> Some (XLCellValue.op_Implicit trailer) :: xs
             )
             |> fun items ->
+                let dateHeads =
+                    allDates
+                    |> List.groupBy (fun x -> x.Date)
+                    |> List.collect (fun (d, dateTimes) ->
+                        Some (XLCellValue.op_Implicit d)
+                        :: List.replicate (dateTimes.Length - 1) None
+                    )
+                    |> fun xs -> None :: xs
+
                 let allDates =
                     allDates
-                    |> List.map (fun x -> Some <| x.ToString())
-                (None :: allDates) :: items
+                    |> List.map (fun x -> Some <| XLCellValue.op_Implicit x)
+                    |> fun xs -> None :: xs
+
+                dateHeads :: (allDates :: items)
 
         do
             use workbook = new XLWorkbook()
@@ -280,7 +291,7 @@ let start (xmlPath: string) =
                     v
                     |> Option.iter (fun v ->
                         let c = worksheet.Cell(y + 1, x + 1)
-                        c.SetValue (XLCellValue.op_Implicit(v))
+                        c.SetValue v
                         |> ignore
                     )
                 )
