@@ -401,13 +401,20 @@ let start (xmlPath: string) =
 
             stopsByDates
             |> Seq.iteri (fun columnIndex (KeyValue(dateTime, _)) ->
-                let c = worksheet.Cell(1, columnIndex + 1 + 1)
+                let columnIndex = columnIndex + 1 + 1
+
+                worksheet.Column(columnIndex).Width <- 16.144844
+
+                let c = worksheet.Cell(1, columnIndex)
                 c.SetValue (XLCellValue.op_Implicit dateTime) |> ignore
             )
 
             finishedRows
             |> List.iteri (fun rowIndex (trailer, xs) ->
                 let rowIndex = rowIndex + 1 + 1
+
+                worksheet.Row(rowIndex).Height <- 85.5
+
                 let c = worksheet.Cell(rowIndex, 1)
                 c.SetValue (XLCellValue.op_Implicit trailer) |> ignore
 
