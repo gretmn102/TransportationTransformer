@@ -109,10 +109,12 @@ module CustomDateTime =
             time |> Option.bind (fun x -> x.Seconds |> Option.map int) |> Option.defaultValue 0
         )
 
+type RowId = int []
+
 type Row =
     {
         /// 1.1, 1.1.1, ...
-        Index: int []
+        Index: RowId
         /// в двухзначных индексах стоит дата, которая распределяется по всем остальным
         Trailer: Choice<CustomDate, string>
         StartDateTime: System.DateTime
@@ -121,11 +123,11 @@ type Row =
         EndLocation: string
     }
 
-type Rows = Row []
+type Rows = Row list
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module Rows =
-    let parseFromXLWorksheet (worksheet: IXLWorksheet) =
+    let parseFromXLWorksheet (worksheet: IXLWorksheet) : Rows =
         let parseIndexes =
             let r = System.Text.RegularExpressions.Regex(@"\d+")
             fun input ->
@@ -207,8 +209,161 @@ module Rows =
 
         getItems ()
 
-[<Struct>]
-type StartOrEnd = Start | End
+type Stop =
+    {
+        DateTime: System.DateTime
+        Location: string
+    }
+
+type Trailer = string
+
+type Transition =
+    {
+        Id: RowId
+        Trailer: Trailer
+        Stops: Stop []
+    }
+
+type StopIndex = int
+
+type TransitionsId = RowId
+
+type Transitions = Map<TransitionsId, Transition>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module Transitions =
+    let ofRows (rows: Rows) : Transitions =
+        let getStops (rows: Rows) =
+            let getStartedStop (row: Row) =
+                {
+                    DateTime = row.StartDateTime
+                    Location = row.StartLocation
+                }
+            let getEndedStop (row: Row) =
+                {
+                    DateTime = row.EndDataTime
+                    Location = row.EndLocation
+                }
+
+            match rows with
+            | [x] ->
+                [|
+                    getStartedStop x
+                    getEndedStop x
+                |]
+            | [] ->
+                failwithf "Function GetStops needs at least one element in the list"
+            | row::rows ->
+                [|
+                    getStartedStop row
+                    yield!
+                        rows |> List.map getEndedStop
+                |]
+
+        rows
+        |> List.filter (fun x -> x.Index.Length = 4)
+        |> List.groupBy (fun row ->
+            let indexes = row.Index
+            [|indexes.[0]; indexes.[1]; indexes.[2]|]
+        )
+        |> List.map (fun (id, subRows) ->
+            let transition =
+                {
+                    Id = id
+                    Stops = getStops subRows
+                    Trailer =
+                        let firstRow = subRows.[0]
+                        match firstRow.Trailer with
+                        | Choice2Of2 trailer -> trailer
+                        | Choice1Of2 date ->
+                            failwithf "Поле %A содержит дату %A, хотя должно содержать "
+                                firstRow
+                                date
+                }
+            id, transition
+        )
+        |> Map.ofList
+
+    let getStop (rowId: RowId, stopIndex: StopIndex) (transitions: Transitions) =
+        Map.tryFind rowId transitions
+        |> Option.map (fun transition ->
+            transition.Stops.[stopIndex]
+        )
+
+type StopsByDates = Map<System.DateTime, (TransitionsId * StopIndex) list>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module StopsByDates =
+    let ofTransitions (transitions: Transitions) : StopsByDates =
+        transitions
+        |> Map.fold
+            (fun st k x ->
+                x.Stops
+                |> Array.fold
+                    (fun (st, index) way ->
+                        let st =
+                            let xs =
+                                Map.tryFind way.DateTime st
+                                |> Option.defaultValue []
+                            Map.add way.DateTime ((k, index)::xs) st
+
+                        st, index + 1
+                    )
+                    (st, 0)
+                |> fst
+            )
+            Map.empty
+
+    let getStop dateTime (transitions: Transitions) (stopsByDates: StopsByDates) =
+        Map.tryFind dateTime stopsByDates
+        |> Option.map (fun coord ->
+            coord
+            |> List.map (fun coord ->
+                Transitions.getStop coord transitions
+            )
+        )
+
+type TranstionsByTrailer = Map<Trailer, TransitionsId Set>
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module TranstionsByTrailer =
+    let ofTransitions (transitions: Transitions) : TranstionsByTrailer =
+        transitions
+        |> Map.fold
+            (fun st transitionId transition ->
+                let k = transition.Trailer
+                let v =
+                    Map.tryFind k st
+                    |> Option.defaultValue Set.empty
+                Map.add k (Set.add transitionId v) st
+            )
+            Map.empty
+
+type StopDateTimeIndex = int
+
+type FinishedRow = Trailer * (StopDateTimeIndex * (TransitionsId * StopIndex)) list
+
+type FinishedRows = FinishedRow list
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module FinishedRows =
+    let create (stopsByDates: StopsByDates) (transtionsByTrailer: TranstionsByTrailer) : FinishedRows =
+        transtionsByTrailer
+        |> Seq.map (fun (KeyValue(trailer, transitionIds)) ->
+            stopsByDates
+            |> Seq.indexed
+            |> Seq.choose (fun (i, (KeyValue(_, stops))) ->
+                stops
+                |> List.tryPick (fun (transitionId, stopIndex) ->
+                    if Set.contains transitionId transitionIds then
+                        Some (i, (transitionId, stopIndex))
+                    else
+                        None
+                )
+            )
+            |> fun xs -> trailer, List.ofSeq xs
+        )
+        |> List.ofSeq
 
 let start (xmlPath: string) =
     let getWorkbook (path: string) =
@@ -233,73 +388,39 @@ let start (xmlPath: string) =
     resultComputation {
         use workbook = getWorkbook xmlPath
         let! worksheet = getWorksheet "Поездки" workbook
-        let items = Rows.parseFromXLWorksheet worksheet
-
-        let items =
-            items
-            |> List.filter (fun x -> x.Index.Length = 3)
-
-        let allDates =
-            items
-            |> List.fold
-                (fun st x ->
-                    Set.add x.StartDateTime st
-                    |> Set.add x.EndDataTime
-                )
-                Set.empty
-            |> List.ofSeq
-
-        let table =
-            items
-            |> List.groupBy (fun x -> x.Trailer)
-            |> List.map (fun (trailer, xs) ->
-                match trailer with
-                | Choice2Of2 trailer ->
-                    allDates
-                    |> List.map (fun d ->
-                        xs
-                        |> List.tryPick (fun x ->
-                            if x.StartDateTime = d then
-                                Some (XLCellValue.op_Implicit x.StartLocation)
-                            elif x.EndDataTime = d then
-                                Some (XLCellValue.op_Implicit x.EndLocation)
-                            else
-                                None
-                        )
-                    )
-                    |> fun xs -> Some (XLCellValue.op_Implicit trailer) :: xs
-            )
-            |> fun items ->
-                let dateHeads =
-                    allDates
-                    |> List.groupBy (fun x -> x.Date)
-                    |> List.collect (fun (d, dateTimes) ->
-                        Some (XLCellValue.op_Implicit d)
-                        :: List.replicate (dateTimes.Length - 1) None
-                    )
-                    |> fun xs -> None :: xs
-
-                let allDates =
-                    allDates
-                    |> List.map (fun x -> Some <| XLCellValue.op_Implicit x)
-                    |> fun xs -> None :: xs
-
-                dateHeads :: (allDates :: items)
+        let rows = Rows.parseFromXLWorksheet worksheet
+        let transitions = Transitions.ofRows rows
+        let stopsByDates = StopsByDates.ofTransitions transitions
+        let transtionsByTrailer = TranstionsByTrailer.ofTransitions transitions
+        let finishedRows = FinishedRows.create stopsByDates transtionsByTrailer
 
         do
             use workbook = new XLWorkbook()
 
             let worksheet = workbook.AddWorksheet()
 
-            table
-            |> List.iteri (fun y ->
-                List.iteri (fun x v ->
-                    v
-                    |> Option.iter (fun v ->
-                        let c = worksheet.Cell(y + 1, x + 1)
-                        c.SetValue v
-                        |> ignore
-                    )
+            stopsByDates
+            |> Seq.iteri (fun columnIndex (KeyValue(dateTime, _)) ->
+                let c = worksheet.Cell(1, columnIndex + 1 + 1)
+                c.SetValue (XLCellValue.op_Implicit dateTime) |> ignore
+            )
+
+            finishedRows
+            |> List.iteri (fun rowIndex (trailer, xs) ->
+                let rowIndex = rowIndex + 1 + 1
+                let c = worksheet.Cell(rowIndex, 1)
+                c.SetValue (XLCellValue.op_Implicit trailer) |> ignore
+
+                xs
+                |> List.iter (fun (columnIndex, coord) ->
+                    let columnIndex = columnIndex + 1 + 1
+                    let c = worksheet.Cell(rowIndex, columnIndex)
+                    let stop =
+                        Transitions.getStop coord transitions
+                        |> Option.defaultWith (fun () ->
+                            failwithf "Not found %A in transitions!" coord
+                        )
+                    c.SetValue (XLCellValue.op_Implicit stop.Location) |> ignore
                 )
             )
 
