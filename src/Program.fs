@@ -412,16 +412,40 @@ let start (xmlPath: string) =
                 c.SetValue (XLCellValue.op_Implicit trailer) |> ignore
 
                 xs
-                |> List.iter (fun (columnIndex, coord) ->
-                    let columnIndex = columnIndex + 1 + 1
-                    let c = worksheet.Cell(rowIndex, columnIndex)
-                    let stop =
-                        Transitions.getStop coord transitions
-                        |> Option.defaultWith (fun () ->
-                            failwithf "Not found %A in transitions!" coord
-                        )
-                    c.SetValue (XLCellValue.op_Implicit stop.Location) |> ignore
-                )
+                |> List.fold
+                    (fun st (columnIndex, ((transitionId, _) as coord)) ->
+                        let columnIndex = columnIndex + 1 + 1
+                        let c = worksheet.Cell(rowIndex, columnIndex)
+                        let stop =
+                            Transitions.getStop coord transitions
+                            |> Option.defaultWith (fun () ->
+                                failwithf "Not found %A in transitions!" coord
+                            )
+                        c.SetValue (XLCellValue.op_Implicit stop.Location) |> ignore
+
+                        let setGrey (cell: IXLCell) =
+                            cell.Style.Fill.BackgroundColor <- XLColor.LightGray
+
+                        let setGreyCell (columnIndex: int) =
+                            let c = worksheet.Cell(rowIndex, columnIndex)
+                            setGrey c
+
+                        let setGreyCurrentCell () =
+                            setGrey c
+                            Some (columnIndex, transitionId)
+
+                        match st with
+                        | None -> setGreyCurrentCell ()
+                        | Some (lastColumnIndex, lastTransitionId) ->
+                            if lastTransitionId = transitionId then
+                                for i = lastColumnIndex + 1 to columnIndex do
+                                    setGreyCell i
+                                Some (columnIndex, lastTransitionId)
+                            else
+                                setGreyCurrentCell ()
+                    )
+                    None
+                |> ignore
             )
 
             workbook.SaveAs("output.xlsx")
