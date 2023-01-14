@@ -365,7 +365,10 @@ module FinishedRows =
         )
         |> List.ofSeq
 
+
 let start (xmlPath: string) =
+    let worksheetName = "Поездки"
+
     let getWorkbook (path: string) =
         try
             new XLWorkbook(path)
@@ -460,5 +463,27 @@ let start (xmlPath: string) =
         return Ok "Готово!"
     }
 
-start @"e:\downloads\2023-01-10_11-56-48.xlsx"
-|> printfn "%A"
+[<EntryPoint>]
+let main args =
+    let resultCode =
+        match args with
+        | [||] ->
+            printfn "Перетащите на программу файл Excel"
+            2
+        | [|path|] ->
+            printfn "ОБрабатываю %s..." path
+            match start path with
+            | Ok x ->
+                printfn "%A" x
+                0
+            | Error err ->
+                printfn "%A" err
+                1
+        | xs ->
+            printfn "Перетащите на программу файл Excel"
+            2
+
+    printfn "Для выхода из программы нажмите любую клавишу..."
+    System.Console.ReadKey () |> ignore
+
+    resultCode
