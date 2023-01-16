@@ -7,3 +7,9 @@ nuget FSharp.Core = 4.7.2
 nuget ClosedXML
 nuget FParsec
 
+group Build
+    source https://api.nuget.org/v3/index.json
+    storage: none
+    framework: net461
+
+    nuget ILMerge = 3.0.41

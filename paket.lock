@@ -9,3 +9,10 @@ NUGET
       System.ValueTuple (>= 4.4)
     FSharp.Core (4.7.2)
     System.ValueTuple (4.4)
+
+GROUP Build
+STORAGE: NONE
+RESTRICTION: == net461
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    ILMerge (3.0.41)
