@@ -8,8 +8,14 @@ nuget ClosedXML
 nuget FParsec
 
 group Build
+    strategy: min
     source https://api.nuget.org/v3/index.json
+    framework: netstandard2.0
     storage: none
-    framework: net461
 
+    nuget FSharp.Core = 5.0.1
+    nuget Fake.Core.Target = 5.20.4
+    nuget Fake.DotNet.Cli = 5.20.4
+    nuget Fake.IO.FileSystem = 5.20.4
+    nuget Fake.Core.ReleaseNotes = 5.20.4
     nuget ILMerge = 3.0.41
