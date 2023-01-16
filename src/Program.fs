@@ -370,16 +370,19 @@ let start (xmlPath: string) =
     let worksheetName = "Поездки"
 
     let getWorkbook (path: string) =
-        try
-            new XLWorkbook(path)
-            |> Ok
-        with
-            | :? System.IO.IOException ->
-                sprintf "Доступ к таблице запрещен. Если он открыт у вас в Excel, то закройте Excel и попробуйте снова."
-                |> Error
-            | e ->
-                sprintf "Непредвиденная ошибка:\n%A" e
-                |> Error
+        if System.IO.File.Exists path then
+            try
+                new XLWorkbook(path)
+                |> Ok
+            with
+                | :? System.IO.IOException ->
+                    sprintf "Доступ к таблице запрещен. Если он открыт у вас в Excel, то закройте Excel и попробуйте снова."
+                    |> Error
+                | e ->
+                    sprintf "Непредвиденная ошибка:\n%A" e
+                    |> Error
+        else
+            Error (sprintf "Файл '%s' не существует." path)
 
     let getWorksheet name (workbook: XLWorkbook) =
         match workbook.Worksheets.TryGetWorksheet name with
@@ -398,9 +401,9 @@ let start (xmlPath: string) =
         let finishedRows = FinishedRows.create stopsByDates transtionsByTrailer
 
         do
-            use workbook = new XLWorkbook()
-
             let worksheet = workbook.AddWorksheet()
+
+            printfn "Добавляю результат в таблицу '%s'..." worksheet.Name
 
             stopsByDates
             |> Seq.iteri (fun columnIndex (KeyValue(dateTime, _)) ->
@@ -458,7 +461,7 @@ let start (xmlPath: string) =
                 |> ignore
             )
 
-            workbook.SaveAs("output.xlsx")
+            workbook.SaveAs(xmlPath)
 
         return Ok "Готово!"
     }
@@ -473,11 +476,11 @@ let main args =
         | [|path|] ->
             printfn "ОБрабатываю %s..." path
             match start path with
-            | Ok x ->
-                printfn "%A" x
+            | Ok resMsg ->
+                printfn "%s" resMsg
                 0
-            | Error err ->
-                printfn "%A" err
+            | Error errMsg ->
+                printfn "%s" errMsg
                 1
         | xs ->
             printfn "Перетащите на программу файл Excel"
