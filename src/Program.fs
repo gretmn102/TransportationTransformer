@@ -415,6 +415,9 @@ let start (xmlPath: string) =
                 c.SetValue (XLCellValue.op_Implicit dateTime) |> ignore
             )
 
+            // trailers column
+            worksheet.Column(1).Width <- 12
+
             finishedRows
             |> List.iteri (fun rowIndex (trailer, xs) ->
                 let rowIndex = rowIndex + 1 + 1
