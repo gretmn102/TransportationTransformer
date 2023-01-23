@@ -429,6 +429,12 @@ let start (xmlPath: string) =
                     (fun st (columnIndex, ((transitionId, _) as coord)) ->
                         let columnIndex = columnIndex + 1 + 1
                         let c = worksheet.Cell(rowIndex, columnIndex)
+
+                        let alignment = c.Style.Alignment
+                        alignment.WrapText <- true
+                        alignment.Horizontal <- XLAlignmentHorizontalValues.Center
+                        alignment.Vertical <- XLAlignmentVerticalValues.Center
+
                         let stop =
                             Transitions.getStop coord transitions
                             |> Option.defaultWith (fun () ->
