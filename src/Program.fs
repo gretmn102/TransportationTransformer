@@ -393,7 +393,7 @@ let start (xmlPath: string) =
 
     resultComputation {
         use workbook = getWorkbook xmlPath
-        let! worksheet = getWorksheet "Поездки" workbook
+        let! worksheet = getWorksheet worksheetName workbook
         let rows = Rows.parseFromXLWorksheet worksheet
         let transitions = Transitions.ofRows rows
         let stopsByDates = StopsByDates.ofTransitions transitions
