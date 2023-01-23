@@ -111,15 +111,19 @@ module CustomDateTime =
 
 type RowId = int []
 
+type DateTimeResult =
+    | Unknown
+    | Value of System.DateTime
+
 type Row =
     {
         /// 1.1, 1.1.1, ...
         Index: RowId
         /// в двухзначных индексах стоит дата, которая распределяется по всем остальным
         Trailer: Choice<CustomDate, string>
-        StartDateTime: System.DateTime
+        StartDateTime: DateTimeResult
         StartLocation: string
-        EndDataTime: System.DateTime
+        EndDataTime: DateTimeResult
         EndLocation: string
     }
 
@@ -165,8 +169,12 @@ module Rows =
                         | _ -> lastDate
 
                     let parseGetDateTime (cell: IXLCell) =
+                        match cell.GetString() with
+                        | "Неизвестно" ->
+                            DateTimeResult.Unknown
+                        | cellValue ->
                         let res =
-                            cell.GetString()
+                            cellValue
                             |> CustomDateTime.parse
 
                         match res with
@@ -178,6 +186,7 @@ module Rows =
                                     Date = lastDate
                                 }
                             |> CustomDateTime.toDateTime
+                            |> DateTimeResult.Value
 
                         | Error x ->
                             failwithf "%s" x
@@ -211,7 +220,7 @@ module Rows =
 
 type Stop =
     {
-        DateTime: System.DateTime
+        DateTime: DateTimeResult
         Location: string
     }
 
@@ -297,17 +306,21 @@ module StopsByDates =
     let ofTransitions (transitions: Transitions) : StopsByDates =
         transitions
         |> Map.fold
-            (fun st k x ->
-                x.Stops
+            (fun st transitionId transition ->
+                transition.Stops
                 |> Array.fold
                     (fun (st, index) way ->
-                        let st =
-                            let xs =
-                                Map.tryFind way.DateTime st
-                                |> Option.defaultValue []
-                            Map.add way.DateTime ((k, index)::xs) st
+                        match way.DateTime with
+                        | Value dateTime ->
+                            let st =
+                                let xs =
+                                    Map.tryFind dateTime st
+                                    |> Option.defaultValue []
+                                Map.add dateTime ((transitionId, index)::xs) st
 
-                        st, index + 1
+                            st, index + 1
+                        | Unknown ->
+                            st, index
                     )
                     (st, 0)
                 |> fst

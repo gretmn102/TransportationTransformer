@@ -1,3 +1,6 @@
+## 1.1.1
+* fix: unknown datetime
+
 ## 1.1.0
 * set trailers column width to 12
 * make wrap and center cells
