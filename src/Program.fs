@@ -461,6 +461,10 @@ let start (xmlPath: string) =
                 |> ignore
             )
 
+            worksheet.SheetView.Freeze(1, 1)
+
+            printfn "Сохраняю документ..."
+
             workbook.SaveAs(xmlPath)
 
         return Ok "Готово!"
