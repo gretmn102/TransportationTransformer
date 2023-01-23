@@ -422,10 +422,10 @@ let start (xmlPath: string) =
             |> Seq.iteri (fun columnIndex (KeyValue(dateTime, _)) ->
                 let columnIndex = columnIndex + 1 + 1
 
-                worksheet.Column(columnIndex).Width <- 16.144844
+                worksheet.Column(columnIndex).Width <- 16.71
 
                 let c = worksheet.Cell(1, columnIndex)
-                c.SetValue (XLCellValue.op_Implicit dateTime) |> ignore
+                c.SetValue (XLCellValue.op_Implicit (dateTime.ToString("dd.MM.yyyy HH:mm:ss"))) |> ignore
             )
 
             // trailers column
