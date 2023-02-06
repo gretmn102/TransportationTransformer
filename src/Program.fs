@@ -226,18 +226,20 @@ type Stop =
 
 type Trailer = string
 
+type TransitionId = RowId
+
 type Transition =
     {
-        Id: RowId
+        Id: TransitionId
         Trailer: Trailer
         Stops: Stop []
     }
 
 type StopIndex = int
 
-type TransitionsId = RowId
+type StopCoords = TransitionId * StopIndex
 
-type Transitions = Map<TransitionsId, Transition>
+type Transitions = Map<TransitionId, Transition>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module Transitions =
@@ -293,13 +295,13 @@ module Transitions =
         )
         |> Map.ofList
 
-    let getStop (rowId: RowId, stopIndex: StopIndex) (transitions: Transitions) =
-        Map.tryFind rowId transitions
+    let getStop ((id: TransitionId, stopIndex: StopIndex): StopCoords) (transitions: Transitions) =
+        Map.tryFind id transitions
         |> Option.map (fun transition ->
             transition.Stops.[stopIndex]
         )
 
-type StopsByDates = Map<System.DateTime, (TransitionsId * StopIndex) list>
+type StopsByDates = Map<System.DateTime, StopCoords list>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module StopsByDates =
@@ -329,14 +331,13 @@ module StopsByDates =
 
     let getStop dateTime (transitions: Transitions) (stopsByDates: StopsByDates) =
         Map.tryFind dateTime stopsByDates
-        |> Option.map (fun coord ->
-            coord
-            |> List.map (fun coord ->
+        |> Option.map (
+            List.map (fun coord ->
                 Transitions.getStop coord transitions
             )
         )
 
-type TranstionsByTrailer = Map<Trailer, TransitionsId Set>
+type TranstionsByTrailer = Map<Trailer, TransitionId Set>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module TranstionsByTrailer =
@@ -352,9 +353,9 @@ module TranstionsByTrailer =
             )
             Map.empty
 
-type StopDateTimeIndex = int
+type StopsByDatesIndex = int
 
-type FinishedRow = Trailer * (StopDateTimeIndex * (TransitionsId * StopIndex)) list
+type FinishedRow = Trailer * (StopsByDatesIndex * StopCoords) list
 
 type FinishedRows = FinishedRow list
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -365,7 +366,7 @@ module FinishedRows =
         |> Seq.map (fun (KeyValue(trailer, transitionIds)) ->
             stopsByDates
             |> Seq.indexed
-            |> Seq.choose (fun (i, (KeyValue(_, stops))) ->
+            |> Seq.choose (fun (i: StopsByDatesIndex, (KeyValue(_, stops))) ->
                 stops
                 |> List.tryPick (fun (transitionId, stopIndex) ->
                     if Set.contains transitionId transitionIds then
@@ -377,7 +378,6 @@ module FinishedRows =
             |> fun xs -> trailer, List.ofSeq xs
         )
         |> List.ofSeq
-
 
 let start (xmlPath: string) =
     let worksheetName = "Поездки"
