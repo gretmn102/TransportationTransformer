@@ -404,17 +404,11 @@ let start (xmlPath: string) =
         | false, _ ->
             Error (sprintf "В документе не найдена \"%s\" таблица!" name)
 
-    resultComputation {
-        use workbook = getWorkbook xmlPath
-        let! worksheet = getWorksheet worksheetName workbook
-        let rows = Rows.parseFromXLWorksheet worksheet
-        let transitions = Transitions.ofRows rows
-        let stopsByDates = StopsByDates.ofTransitions transitions
-        let transtionsByTrailer = TranstionsByTrailer.ofTransitions transitions
+    let createSheet stopsByDates transtionsByTrailer transitions (sheetName: string) (workbook: XLWorkbook) =
         let finishedRows = FinishedRows.create stopsByDates transtionsByTrailer
 
         do
-            let worksheet = workbook.AddWorksheet()
+            let worksheet = workbook.AddWorksheet(sheetName)
 
             printfn "Добавляю результат в таблицу '%s'..." worksheet.Name
 
@@ -485,9 +479,33 @@ let start (xmlPath: string) =
 
             worksheet.SheetView.Freeze(1, 1)
 
-            printfn "Сохраняю документ..."
+    resultComputation {
+        use workbook = getWorkbook xmlPath
+        let! worksheet = getWorksheet worksheetName workbook
+        let rows = Rows.parseFromXLWorksheet worksheet
+        let transitions = Transitions.ofRows rows
+        let stopsByDates = StopsByDates.ofTransitions transitions
+        let transtionsByTrailer = TranstionsByTrailer.ofTransitions transitions
 
-            workbook.SaveAs(xmlPath)
+        let stopsByDatess =
+            stopsByDates
+            |> Seq.groupBy (fun (KeyValue(dateTime, stop)) ->
+                dateTime.Date
+            )
+            |> Seq.map (fun (date, stops) ->
+                let stops =
+                    stops |> Seq.map (|KeyValue|)
+                date, Map.ofSeq stops
+            )
+
+        do
+            for date, stopsByDates in stopsByDatess do
+                let sheetName = date.ToString("dd.MM.yyyy")
+                createSheet stopsByDates transtionsByTrailer transitions sheetName workbook
+
+        printfn "Сохраняю документ..."
+
+        workbook.SaveAs(xmlPath)
 
         return Ok "Готово!"
     }
