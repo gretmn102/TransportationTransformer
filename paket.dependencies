@@ -7,6 +7,9 @@ nuget FSharp.Core = 4.7.2
 nuget ClosedXML
 nuget FParsec
 
+# test:
+nuget FuChu
+
 group Build
     strategy: min
     source https://api.nuget.org/v3/index.json

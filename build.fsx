@@ -26,6 +26,10 @@ let mainProjName = "TransportationTransformer"
 let mainProjPath = f mainProjName
 let mainProjDir = Path.getDirectory mainProjPath
 
+let testProjName = "Tests"
+let testProjPath = f testProjName
+let testProjDir = Path.getDirectory testProjPath
+
 let deployDir = Path.getFullName "./deploy"
 
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
@@ -57,6 +61,11 @@ Target.create "Run" (fun _ ->
 Target.create "Deploy" (fun _ ->
     mainProjDir
     |> dotnet (sprintf "build %s -o \"%s\"" commonBuildArgs deployDir)
+)
+
+Target.create "Tests" (fun _ ->
+    testProjDir
+    |> dotnet (sprintf "run %s" commonBuildArgs)
 )
 
 Target.create "Release" (fun _ ->

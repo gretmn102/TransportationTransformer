@@ -6,6 +6,7 @@
       {
         "label": "Deploy",
         "type": "shell",
+        "group": "build",
         "command": [
           "./build.sh",
           "-t",
@@ -16,6 +17,24 @@
             "build.cmd",
             "-t",
             "Deploy"
+          ]
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Test",
+        "group": "test",
+        "type": "shell",
+        "command": [
+          "./build.sh",
+          "-t",
+          "Tests"
+        ],
+        "windows": {
+          "command": [
+            "build.cmd",
+            "-t",
+            "Tests"
           ]
         },
         "problemMatcher": []
