@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TransportationTransformer", "src\TransportationTransformer.fsproj", "{90E59952-B053-4216-AC19-559909D39F99}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "tests\Tests.fsproj", "{BCC3061C-2CA7-496A-A5F5-C58CADAE66BA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{90E59952-B053-4216-AC19-559909D39F99}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{90E59952-B053-4216-AC19-559909D39F99}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{90E59952-B053-4216-AC19-559909D39F99}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCC3061C-2CA7-496A-A5F5-C58CADAE66BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCC3061C-2CA7-496A-A5F5-C58CADAE66BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCC3061C-2CA7-496A-A5F5-C58CADAE66BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCC3061C-2CA7-496A-A5F5-C58CADAE66BA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
