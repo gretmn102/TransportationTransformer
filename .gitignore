@@ -394,3 +394,4 @@ paket-files/
 /deploy/
 /Directory.Build.props
 *.fs.js
+/.vscode/settings.json
