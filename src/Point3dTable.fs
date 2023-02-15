@@ -1,49 +1,46 @@
 module Point3dTable
 
-type Point3d<'RowValue, 'ColumnValue, 'Data> = ('RowValue * 'ColumnValue * 'Data)
+type Point3d<'X, 'Y, 'Z> = 'X * 'Y * 'Z
 
 type Tuple = int * int
 
-type Table<'RowValue, 'ColumnValue, 'Data> =
+type Table<'X, 'Y, 'Z> =
     {
-        Headers: 'ColumnValue []
-        Values: ('RowValue * option<'Data> []) []
+        Headers: 'X []
+        Values: ('Y * option<'Z> []) []
     }
 
-let ofPoints (points: Point3d<'RowValue, 'ColumnValue, 'Data> []) : Table<'RowValue, 'ColumnValue, 'Data> =
-    let columns =
+let ofPoints (points: Point3d<'X, 'Y, 'Z> []) : Table<'X, 'Y, 'Z> =
+    let xs =
         points
         |> Array.fold
-            (fun st (rowValue, columnValue, data) ->
-                Set.add columnValue st
+            (fun st (x, y, z) ->
+                Set.add x st
             )
             Set.empty
 
-    let rows =
+    let values =
         points
         |> Array.fold
-            (fun st (rowValue, columnValue, data) ->
-                let rows =
-                    Map.tryFind rowValue st
+            (fun st (x, y, z) ->
+                let zs =
+                    Map.tryFind y st
                     |> Option.defaultValue Map.empty
 
-                Map.add rowValue (Map.add columnValue data rows) st
+                Map.add y (Map.add x z zs) st
             )
             Map.empty
-
-    let values =
-        rows
-        |> Map.map (fun row cols ->
+        |> Map.map (fun y xzs ->
             let res =
-                columns
-                |> Seq.map (fun currentCol ->
-                    Map.tryFind currentCol cols
+                xs
+                |> Seq.map (fun x ->
+                    Map.tryFind x xzs
                 )
                 |> Array.ofSeq
-            row, res
+            y, res
         )
 
     {
-        Headers = columns |> Array.ofSeq
+        Headers = xs |> Array.ofSeq
         Values = values |> Seq.map (fun x -> x.Value) |> Array.ofSeq
     }
