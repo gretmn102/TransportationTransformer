@@ -82,10 +82,13 @@ module CustomDateTime =
                 (opt (attempt (pdate .>> spaces)))
                 (opt ptime)
                 (fun date time ->
-                    {
-                        Date = date
-                        Time = time
-                    }
+                    match date, time with
+                    | None, None -> None
+                    | _ ->
+                        Some {
+                            Date = date
+                            Time = time
+                        }
                 )
 
         let runResult p str =
@@ -186,15 +189,18 @@ module Rows =
 
                         match res with
                         | Ok customDateTime ->
-                            if Option.isSome customDateTime.Date then
-                                customDateTime
-                            else
-                                { customDateTime with
-                                    Date = lastDate
-                                }
-                            |> CustomDateTime.toDateTime
-                            |> DateTimeResult.Value
-
+                            match customDateTime with
+                            | Some customDateTime ->
+                                if Option.isSome customDateTime.Date then
+                                    customDateTime
+                                else
+                                    { customDateTime with
+                                        Date = lastDate
+                                    }
+                                |> CustomDateTime.toDateTime
+                                |> DateTimeResult.Value
+                            | None ->
+                                DateTimeResult.Unknown
                         | Error x ->
                             failwithf "%s" x
 
