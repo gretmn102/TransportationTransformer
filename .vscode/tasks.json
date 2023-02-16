@@ -22,6 +22,24 @@
         "problemMatcher": []
       },
       {
+        "label": "DeployAndRunIlMerge",
+        "type": "shell",
+        "group": "build",
+        "command": [
+          "./build.sh",
+          "-t",
+          "RunIlMerge"
+        ],
+        "windows": {
+          "command": [
+            "build.cmd",
+            "-t",
+            "RunIlMerge"
+          ]
+        },
+        "problemMatcher": []
+      },
+      {
         "label": "Test",
         "group": "test",
         "type": "shell",
