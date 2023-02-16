@@ -405,6 +405,10 @@ let start (xmlPath: string) =
                 let c = worksheet.Cell(1, columnIndex + 1)
                 c.SetValue (XLCellValue.op_Implicit (dateTime.ToString "dd.MM.yyyy")) |> ignore
 
+                let r = worksheet.Range(c, c.CellRight())
+                r.Merge() |> ignore
+                r.Style.Alignment.Horizontal <- XLAlignmentHorizontalValues.Center
+
                 worksheet.Column(columnIndex + 1).Width <- 16.71
                 worksheet.Column(columnIndex + 2).Width <- 16.71
 
