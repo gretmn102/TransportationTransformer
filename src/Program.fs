@@ -114,6 +114,13 @@ type RowId = int []
 type DateTimeResult =
     | Unknown
     | Value of System.DateTime
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module DateTimeResult =
+    let toOption (dtr: DateTimeResult) =
+        match dtr with
+        | Unknown -> None
+        | Value date -> Some date
 
 type Row =
     {
@@ -301,83 +308,62 @@ module Transitions =
             transition.Stops.[stopIndex]
         )
 
-type StopsByDates = Map<System.DateTime, StopCoords list>
+type Data = { StartLoc: string option; EndLoc: string option }
+
+type Point = System.DateTime * Trailer * Data
+
+type FinishedTable = Point3dTable.Table<System.DateTime, Trailer, Data>
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
-module StopsByDates =
-    let ofTransitions (transitions: Transitions) : StopsByDates =
-        transitions
-        |> Map.fold
-            (fun st transitionId transition ->
-                transition.Stops
-                |> Array.fold
-                    (fun (st, index) way ->
-                        match way.DateTime with
-                        | Value dateTime ->
-                            let st =
-                                let xs =
-                                    Map.tryFind dateTime st
-                                    |> Option.defaultValue []
-                                Map.add dateTime ((transitionId, index)::xs) st
-
-                            st, index + 1
+module FinishedTable =
+    let create (transition: Transitions) : FinishedTable =
+        transition
+        |> Seq.choose (fun (KeyValue(_, x)) ->
+            let res =
+                let f startStop endStop =
+                    let get (stop: Stop) =
+                        match stop.DateTime with
+                        | Value x ->
+                            Some (x.Date, stop.Location)
                         | Unknown ->
-                            st, index
+                            None
+
+                    get startStop
+                    |> Option.map (fun (date, startLoc) ->
+                        let endLoc =
+                            endStop
+                            |> Option.bind (fun endStop ->
+                                DateTimeResult.toOption endStop.DateTime
+                                |> Option.bind (fun x ->
+                                    if date = x.Date then
+                                        Some endStop.Location
+                                    else
+                                        None
+                                )
+                            )
+
+                        let data =
+                            {
+                                StartLoc = Some startLoc
+                                EndLoc = endLoc
+                            }
+                        date, data
                     )
-                    (st, 0)
-                |> fst
-            )
-            Map.empty
 
-    let getStop dateTime (transitions: Transitions) (stopsByDates: StopsByDates) =
-        Map.tryFind dateTime stopsByDates
-        |> Option.map (
-            List.map (fun coord ->
-                Transitions.getStop coord transitions
+                match x.Stops with
+                | [|startStop|] ->
+                    f startStop None
+                | [||] -> None
+                | stops ->
+                    f stops.[0] (Some stops.[stops.Length - 1])
+
+            res
+            |> Option.map (fun (date, data) ->
+                date, x.Trailer, data
             )
         )
-
-type TranstionsByTrailer = Map<Trailer, TransitionId Set>
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-[<RequireQualifiedAccess>]
-module TranstionsByTrailer =
-    let ofTransitions (transitions: Transitions) : TranstionsByTrailer =
-        transitions
-        |> Map.fold
-            (fun st transitionId transition ->
-                let k = transition.Trailer
-                let v =
-                    Map.tryFind k st
-                    |> Option.defaultValue Set.empty
-                Map.add k (Set.add transitionId v) st
-            )
-            Map.empty
-
-type StopsByDatesIndex = int
-
-type FinishedRow = Trailer * (StopsByDatesIndex * StopCoords) list
-
-type FinishedRows = FinishedRow list
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-[<RequireQualifiedAccess>]
-module FinishedRows =
-    let create (stopsByDates: StopsByDates) (transtionsByTrailer: TranstionsByTrailer) : FinishedRows =
-        transtionsByTrailer
-        |> Seq.map (fun (KeyValue(trailer, transitionIds)) ->
-            stopsByDates
-            |> Seq.indexed
-            |> Seq.choose (fun (i: StopsByDatesIndex, (KeyValue(_, stops))) ->
-                stops
-                |> List.tryPick (fun (transitionId, stopIndex) ->
-                    if Set.contains transitionId transitionIds then
-                        Some (i, (transitionId, stopIndex))
-                    else
-                        None
-                )
-            )
-            |> fun xs -> trailer, List.ofSeq xs
-        )
-        |> List.ofSeq
+        |> Array.ofSeq
+        |> Point3dTable.ofPoints
 
 let start (xmlPath: string) =
     let worksheetName = "Поездки"
@@ -404,77 +390,60 @@ let start (xmlPath: string) =
         | false, _ ->
             Error (sprintf "В документе не найдена \"%s\" таблица!" name)
 
-    let createSheet stopsByDates transtionsByTrailer transitions (sheetName: string) (workbook: XLWorkbook) =
-        let finishedRows = FinishedRows.create stopsByDates transtionsByTrailer
+    let createSheet transitions (workbook: XLWorkbook) =
+        let finishedTable = FinishedTable.create transitions
 
         do
-            let worksheet = workbook.AddWorksheet(sheetName)
+            let worksheet = workbook.AddWorksheet()
 
             printfn "Добавляю результат в таблицу '%s'..." worksheet.Name
 
-            stopsByDates
-            |> Seq.iteri (fun columnIndex (KeyValue(dateTime, _)) ->
-                let columnIndex = columnIndex + 1 + 1
+            finishedTable.Headers
+            |> Seq.iteri (fun columnIndex dateTime ->
+                let columnIndex = 1 + columnIndex * 2
 
-                worksheet.Column(columnIndex).Width <- 16.71
+                let c = worksheet.Cell(1, columnIndex + 1)
+                c.SetValue (XLCellValue.op_Implicit (dateTime.ToString "dd.MM.yyyy")) |> ignore
 
-                let c = worksheet.Cell(1, columnIndex)
-                c.SetValue (XLCellValue.op_Implicit (dateTime.ToString("dd.MM.yyyy HH:mm:ss"))) |> ignore
+                worksheet.Column(columnIndex + 1).Width <- 16.71
+                worksheet.Column(columnIndex + 2).Width <- 16.71
             )
 
             // trailers column
             worksheet.Column(1).Width <- 12
 
-            finishedRows
-            |> List.iteri (fun rowIndex (trailer, xs) ->
-                let rowIndex = rowIndex + 1 + 1
+            finishedTable.Values
+            |> Array.iteri (fun rowIndex (trailer, xs) ->
+                let rowIndex = 1 + rowIndex
 
-                worksheet.Row(rowIndex).Height <- 85.5
+                worksheet.Row(rowIndex + 1).Height <- 85.5
 
-                let c = worksheet.Cell(rowIndex, 1)
+                let c = worksheet.Cell(rowIndex + 1, 1)
                 c.SetValue (XLCellValue.op_Implicit trailer) |> ignore
 
                 xs
-                |> List.fold
-                    (fun st (columnIndex, ((transitionId, _) as coord)) ->
-                        let columnIndex = columnIndex + 1 + 1
-                        let c = worksheet.Cell(rowIndex, columnIndex)
+                |> Array.iteri
+                    (fun columnIndex data ->
+                        match data with
+                        | Some data ->
+                            let set columnIndex (value: string) =
+                                let c = worksheet.Cell(rowIndex + 1, columnIndex + 1)
+                                let alignment = c.Style.Alignment
+                                alignment.WrapText <- true
+                                alignment.Horizontal <- XLAlignmentHorizontalValues.Center
+                                alignment.Vertical <- XLAlignmentVerticalValues.Center
+                                c.SetValue (XLCellValue.op_Implicit value) |> ignore
 
-                        let alignment = c.Style.Alignment
-                        alignment.WrapText <- true
-                        alignment.Horizontal <- XLAlignmentHorizontalValues.Center
-                        alignment.Vertical <- XLAlignmentVerticalValues.Center
+                            let columnIndex = 1 + columnIndex * 2
 
-                        let stop =
-                            Transitions.getStop coord transitions
-                            |> Option.defaultWith (fun () ->
-                                failwithf "Not found %A in transitions!" coord
-                            )
-                        c.SetValue (XLCellValue.op_Implicit stop.Location) |> ignore
+                            data.StartLoc
+                            |> Option.iter (set columnIndex)
 
-                        let setGrey (cell: IXLCell) =
-                            cell.Style.Fill.BackgroundColor <- XLColor.LightGray
-
-                        let setGreyCell (columnIndex: int) =
-                            let c = worksheet.Cell(rowIndex, columnIndex)
-                            setGrey c
-
-                        let setGreyCurrentCell () =
-                            setGrey c
-                            Some (columnIndex, transitionId)
-
-                        match st with
-                        | None -> setGreyCurrentCell ()
-                        | Some (lastColumnIndex, lastTransitionId) ->
-                            if lastTransitionId = transitionId then
-                                for i = lastColumnIndex + 1 to columnIndex do
-                                    setGreyCell i
-                                Some (columnIndex, lastTransitionId)
-                            else
-                                setGreyCurrentCell ()
+                            data.EndLoc
+                            |> Option.iter (set (columnIndex + 1))
+                        | None ->
+                            ()
                     )
-                    None
-                |> ignore
             )
 
             worksheet.SheetView.Freeze(1, 1)
@@ -484,24 +453,8 @@ let start (xmlPath: string) =
         let! worksheet = getWorksheet worksheetName workbook
         let rows = Rows.parseFromXLWorksheet worksheet
         let transitions = Transitions.ofRows rows
-        let stopsByDates = StopsByDates.ofTransitions transitions
-        let transtionsByTrailer = TranstionsByTrailer.ofTransitions transitions
 
-        let stopsByDatess =
-            stopsByDates
-            |> Seq.groupBy (fun (KeyValue(dateTime, stop)) ->
-                dateTime.Date
-            )
-            |> Seq.map (fun (date, stops) ->
-                let stops =
-                    stops |> Seq.map (|KeyValue|)
-                date, Map.ofSeq stops
-            )
-
-        do
-            for date, stopsByDates in stopsByDatess do
-                let sheetName = date.ToString("dd.MM.yyyy")
-                createSheet stopsByDates transtionsByTrailer transitions sheetName workbook
+        createSheet transitions workbook
 
         printfn "Сохраняю документ..."
 
