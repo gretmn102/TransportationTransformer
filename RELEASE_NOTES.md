@@ -1,3 +1,7 @@
+## 2.0.0
+* remake the fully output
+* fix: empty CustomDateTime parse
+
 ## 1.1.2
 * fix: format datetime
 
