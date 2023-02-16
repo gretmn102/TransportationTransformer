@@ -407,6 +407,13 @@ let start (xmlPath: string) =
 
                 worksheet.Column(columnIndex + 1).Width <- 16.71
                 worksheet.Column(columnIndex + 2).Width <- 16.71
+
+                do
+                    let rowIndex = 1
+                    let c = worksheet.Cell(rowIndex + 1, columnIndex + 1)
+                    c.SetValue(XLCellValue.op_Implicit "Начало") |> ignore
+                    let c = worksheet.Cell(rowIndex + 1, columnIndex + 1 + 1)
+                    c.SetValue(XLCellValue.op_Implicit "Конец") |> ignore
             )
 
             // trailers column
@@ -414,7 +421,7 @@ let start (xmlPath: string) =
 
             finishedTable.Values
             |> Array.iteri (fun rowIndex (trailer, xs) ->
-                let rowIndex = 1 + rowIndex
+                let rowIndex = 1 + 1 + rowIndex
 
                 worksheet.Row(rowIndex + 1).Height <- 85.5
 
@@ -446,7 +453,7 @@ let start (xmlPath: string) =
                     )
             )
 
-            worksheet.SheetView.Freeze(1, 1)
+            worksheet.SheetView.Freeze(2, 1)
 
     resultComputation {
         use workbook = getWorkbook xmlPath
